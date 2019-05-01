@@ -10,7 +10,7 @@ class DnsParser:
         bits = to_bits(two_bytes)
         if bits[:2] == '11':
             offset = int(bits[2:], 2)
-            return offset+1
+            return offset
         return 0
 
     @staticmethod
@@ -20,8 +20,8 @@ class DnsParser:
         pos = 0
         while qsection[pos] != 0:
             pos += 1
-        qname = qsection[:pos + 1]
-        qtype = qsection[pos + 1]
+        qname = qsection[:pos+1]
+        qtype = qsection[pos+1:pos+3]
         return dns_query(query, id, qname, qtype)
 
     @staticmethod
@@ -61,26 +61,26 @@ class DnsParser:
         while offset < len(response) and response[offset] != 0:
             pointer_offset = DnsParser.get_offset(response[offset:offset+2])
             if pointer_offset:
-                while pointer_offset:
-                    part = DnsParser.get_part_by_offset(response, pointer_offset)
-                    name += part
-                    offset += 2
-                    pointer_offset = DnsParser.get_offset(response[offset:offset + 2])
-                break
-            length = response[offset]
-            name += response[offset:offset + length + 1]
-            offset += length + 1
+                part, _ = DnsParser.get_name(response, pointer_offset)
+                name += part
+                offset += 2
+                return name, offset
+            else:
+                length = response[offset]
+                name += response[offset:offset + length + 1]
+                offset += length + 1
         name += b'\x00'
-        return name, offset
+        return name, offset + 1
 
     @staticmethod
     def get_part_by_offset(response, offset):
-        part = b''
-        while offset < len(response) and response[offset] != 0:
-            length = response[offset]
-            part += response[offset:offset+length+1]
-            offset += length + 1
-        part += b'\x00'
+        # part = b''
+        # while offset < len(response) and response[offset] != 0:
+        #     length = response[offset]
+        #     part += response[offset:offset+length+1]
+        #     offset += length + 1
+        length = response[offset]
+        part = response[offset:offset+length+1]
         return part
 
 
@@ -89,3 +89,14 @@ def to_bits(bytestr):
     for byte in bytestr:
         bits += bin(byte)[2:].zfill(8)
     return bits
+
+
+def main():
+    packet = b'\x00\x15\x80\x00\x00\x01\x00\x01\x00\x00\x00\x00\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x02e1\x02ru\x00\x00\x01\x00\x01\x02e1\x02ru\x00\x00\x01\x00\x01\x00\x00\x00\x00\x00\x04\xd4\xc1\xa3\x06'
+    records = DnsParser.parse_response(packet)
+    for record in records:
+        print(record.name)
+
+
+if __name__ == '__main__':
+    main()

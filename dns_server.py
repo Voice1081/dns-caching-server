@@ -34,7 +34,6 @@ class DnsServer:
         if name in self.cache and qtype in self.cache[name]:
             for record in self.cache[name][qtype]:
                 if datetime.now() >= record.cached_until:
-                    print('remove')
                     self.cache[name][qtype].remove(record)
             if len(self.cache[name][qtype]) > 0:
                 record = self.cache[name][qtype][0]
@@ -43,7 +42,8 @@ class DnsServer:
         else:
             return False
         response = b''
-        response += id + b'\x80\x00' + b'\x00\x01' + b'\x00\x01' + b'\x00\x00' + b'\x00\x00' + query[2:] + record.to_dns_format()
+        response += id + b'\x80\x00' + b'\x00\x01' + b'\x00\x01' + b'\x00\x00' + b'\x00\x00' + query[12:] + record.to_dns_format()
+        print(response)
         return response
 
     def start(self):
