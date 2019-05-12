@@ -1,10 +1,12 @@
 import socket
+import pickle
 from datetime import datetime, timedelta
 from dns_parser import DnsParser
 
 
 class ResourceRecord:
     def __init__(self, record):
+        self.authoritative = record.authoritative
         self.name = record.name
         self.rtype = record.rtype
         self.rclass = record.rclass
@@ -26,9 +28,17 @@ class DnsServer:
         self.forwarder_address = forwarder_address
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.forwarder_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.server_sock.bind(('127.0.0.1', 53))
+        self.server_sock.bind(server_address)
         self.forwarder_sock.connect(forwarder_address)
-        self.cache = dict()
+        try:
+            f = open('cache', 'rb')
+            self.cache = pickle.loads(f.read())
+        except FileNotFoundError:
+            f = open('cache', 'wb')
+            f.close()
+            self.cache = dict()
+        except EOFError:
+            self.cache = dict()
 
     def make_response_from_cache(self, id, name, qtype, query):
         if name in self.cache and qtype in self.cache[name]:
@@ -42,11 +52,10 @@ class DnsServer:
         else:
             return False
         response = b''
-        response += id + b'\x80\x00' + b'\x00\x01' + b'\x00\x01' + b'\x00\x00' + b'\x00\x00' + query[12:] + record.to_dns_format()
-        print(response)
+        response += id + int(('1' + '0000' + str(record.authoritative) + '0000000000'), 2).to_bytes(2, 'big') + b'\x00\x01' + b'\x00\x01' + b'\x00\x00' + b'\x00\x00' + query[12:] + record.to_dns_format()
         return response
 
-    def start(self):
+    def do(self):
         while True:
             query, addr = self.server_sock.recvfrom(1024)
             parsed_query = DnsParser.parse_query(query)
@@ -67,9 +76,18 @@ class DnsServer:
                             self.cache[record.name][record.rtype] = list()
                         self.cache[record.name][record.rtype].append(record)
 
+    def start(self):
+        try:
+            self.do()
+        finally:
+            with open('cache', 'wb') as f:
+                f.write(pickle.dumps(self.cache))
+            self.server_sock.close()
+            self.forwarder_sock.close()
+
 
 def main():
-    server = DnsServer(('127.0.0.1', 53), ('212.193.163.7', 53))
+    server = DnsServer(('127.0.0.1', 53), ('ns1.e1.ru', 53))
     server.start()
 
 

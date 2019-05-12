@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 dns_query = namedtuple('dns_query', ['query', 'id', 'qname', 'qtype'])
-dns_resource_record = namedtuple('dns_resource_record', ['name', 'rtype', 'rclass', 'ttl', 'rdlength', 'rdata'])
+dns_resource_record = namedtuple('dns_resource_record', ['authoritative', 'name', 'rtype', 'rclass', 'ttl', 'rdlength', 'rdata'])
 
 
 class DnsParser:
@@ -27,6 +27,7 @@ class DnsParser:
     @staticmethod
     def parse_response(response):
         records = list()
+        authoritative = int(to_bits(response[2:4])[0])
         rcode = int(to_bits(response[2:4])[1:5], 2)
         if rcode != 0:
             return None
@@ -39,12 +40,12 @@ class DnsParser:
             _, offset = DnsParser.get_name(response, offset)
             offset += 4
         for i in range(0, answers + authority + additional):
-            record, offset = DnsParser.parse_resource_record(response, offset)
+            record, offset = DnsParser.parse_resource_record(response, offset, authoritative)
             records.append(record)
         return records
 
     @staticmethod
-    def parse_resource_record(response, offset):
+    def parse_resource_record(response, offset, authoritative):
         name, offset = DnsParser.get_name(response, offset)
         rtype = response[offset:offset+2]
         rclass = response[offset+2:offset+4]
@@ -53,7 +54,7 @@ class DnsParser:
         length = int.from_bytes(rdlength, byteorder='big')
         rdata = response[offset+10:offset+10+length]
         offset += 10 + length
-        return dns_resource_record(name, rtype, rclass, ttl, rdlength, rdata), offset
+        return dns_resource_record(authoritative, name, rtype, rclass, ttl, rdlength, rdata), offset
 
     @staticmethod
     def get_name(response, offset):
